@@ -1,0 +1,19 @@
+@charset "utf-8";
+html {
+    font-size: 100%;
+}
+
+body {
+    background-color: #88DD61;
+    color: black;
+    margin: 0;
+    padding: 0;
+}
+
+
+
+.wrapper {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0 30px;
+}
