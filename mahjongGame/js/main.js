@@ -125,19 +125,20 @@ window.onload = function(){
 ###################################################*/
 
 //メインの関数
-function main(){
+async function main(){
   let [deck, playerTiles, cpuTiles] = prepareGame();
-  // console.log(deck,playerTiles, cpuTiles);
 
-  let obj = {deck, playerTiles, cpuTiles};
-  drawAll(obj);
+  drawAll(deck, playerTiles, cpuTiles);
 
-  playerAction(deck, playerTiles, obj);
+  let playerThrownAwayTiles;
+  [deck, playerTiles, playerThrownAwayTiles] = await playerAction(deck, playerTiles);
+
+  let cpuThrownAwayTiles = [[], [], []];
+  for(let i=0; len<CPUS; i++){
+    [deck, cpuTiles, cpuThrownAwayTiles[i]] = await cpusAction(deck, cpuTiles[i]);
+  }
 }
 
-(() => {
-  alert('aaa');
-})()
 /*---------------------------------------------------
   ゲームの準備関連
 ----------------------------------------------------*/
@@ -218,7 +219,6 @@ function preparePlayersTiles(preDeck){
     山から13枚引く*/
   let deck = [...preDeck];
   const TILES_IN_HAND = 13;
-  const CPUS = 3;
 
   //自家が山から13枚引く
   let playerTiles = [];
@@ -236,8 +236,6 @@ function preparePlayersTiles(preDeck){
     }
     riiPai(tiles);
   });
-
-  console.log(deck, playerTiles, cpuTiles);
 
   return [deck, playerTiles, cpuTiles];
 }
@@ -261,18 +259,20 @@ function riiPai(tiles){
   自家のアクション関連
 ----------------------------------------------------*/
 //自家の全てのアクション
-async function playerAction(preDeck, prePlayersTiles, obj){
+async function playerAction(preDeck, prePlayersTiles){
   const WAN_PAI = 14;
 
   //残り牌数が王牌以上だったら行動する
   if(preDeck.length > WAN_PAI){
     let deck = [...preDeck];
-    //ツモる
-    let playerTiles = [...prePlayersTiles, deck.pop()];
-    //プレイヤーが捨てる牌を選んで捨てる
-    let playerThrownAwayTiles = await throwAway(obj);
+    let playerTiles = [...prePlayersTiles];
 
-    return [deck, playerTiles, playerThrownAwayTiles];
+    [deck, playerTiles] = getTile(preDeck, prePlayersTiles);
+
+    let playerThrownAwayTiles;
+    [playerTiles, playerThrownAwayTiles[playerThrownAwayTiles.length]] = await throwAway(deck, playerTiles);
+
+    return [deck, playerTiles, playerThrownAwayTiles]
   }
   else{
     // finish = true;
@@ -280,31 +280,40 @@ async function playerAction(preDeck, prePlayersTiles, obj){
   }
 }
 
+
+function getTile(deck, preTiles) {
+  let newTiles = [...preTiles, deck.pop()];
+  return [deck, newTiles];
+}
+
+
 // //自家の打牌アクション
-function throwAway(obj){
+function throwAway(deck, playerTiles){
+  let cursorSelecting = 0;
+  const MOST_LEFT = 0;
+  const MOST_RIGHT = 14
+  let timeoutId;
+  let isWait_f = true;
+
   document.addEventListener("keydown", (e) => {
-    let cursorSelecting = 0;
-    const MOST_LEFT = 0;
-    const MOST_RIGHT = 14
-    let timeoutId;
     //自家が捨て牌を選ぶ時間じゃない時＝自家の捨て牌選択ループ外では動かない
     switch(e.keyCode){
       case 37:  //左
-        isWaiting(() => {
+        isWaiting(isWait_f, () => {
           //カーソルが一番左じゃない限り左にカーソルを移動させる
           if(cursorSelecting != MOST_LEFT ){
             cursorSelecting--;
             //新しいカーソルの位置を描画し直す
-            drawAll(obj);
+            drawAll(deck, playerTiles, cpuTiles);
             drawCursor();
           }}
         );
       break;
       case 39:  //右
-        isWaiting(() => {
+        isWaiting(isWait_f, () => {
            if(cursorSelecting != MOST_RIGHT ){
             cursorSelecting++;
-            drawAll(obj);
+            drawAll(deck, playerTiles, cpuTiles);
             drawCursor();
           }
         })
@@ -312,8 +321,9 @@ function throwAway(obj){
       //エンターを押したら捨て牌選択待ちのループを解除して次の処理に行けるようにする
       //つまり、エンターで捨て牌を決定して捨てるということ
       case 13:  //エンター
-        isWaiting(() => {
+        isWaiting(isWait_f, () => {
           clearTimeout(timeoutId);
+          isWait_f = false;
         })
 
       // case 82:
@@ -323,109 +333,77 @@ function throwAway(obj){
       //   }
   }});
 
-  return new Promise(() => {
+  return new Promise((resolve) => {
     timeoutId = setTimeout(() => {
-      let len = obj.playerTiles.length;
-      alert();
-      return obj.playerTiles[Math.floor(Math.random * len)];
-    }, 100)
+      let rand = Math.floor(Math.random() * playerTiles.length);
+      let playerThrownAwayTiles = playerTiles[rand];
+
+      playerTiles.splice(rand, 1);
+      riiPai(playerTiles);
+
+      resolve([playerTiles, playerThrownAwayTiles]);
+    }, 5000)
   })
 }
 
 
-// //自家の打牌アクション
-// もう使わない
-// function player_throw_away_action(){
-//   //カーソルを描画する
-//   drawCursor();
-//   //打牌選択ループに入るフラグをtureにする
-//   isWaitingSelection = true;
-//   //打牌選択ループに入る
-//   throw_away_loop();
-// }
-
-// //打牌選択を待つループ処理 もう使わない
-// function throw_away_loop(){
-//   if (isWaitingSelection){
-
-//     //下記のキーボード操作でループフラグがfalseにされない限り1秒に10回(遅延が気にならない適当な時間)ループし続ける
-//     //(謎)なぜかダブルクオーテーションをつけると無限ループがエラー扱いにならず止まらずに処理できたからこうしてる
-//     setTimeout("throw_away_loop()", 100);
-//   }
-//   else{
-//     //プレイヤー達全員の捨て牌を格納する配列に捨て牌を格納する
-//     //配列は2次元で中に自家→下家→対面→上家の順で配列を用意した
-//     playerThrownAwayTiles[0].push(playerTiles[cursorSelecting]);
-//     //プレイヤーの手牌から該当の牌を削除する
-//     playerTiles.splice(cursorSelecting,1);
-//     //再度理牌して並び替える
-//     riiPai(playerTiles);
-
-//     //新しい情報を描画し直す
-//     drawAll();
-
-//     //次の処理
-//     judge_tempai();
-//   }
-// }
-
-//キーボードイベント
-
-
-function isWaiting(fn){
-  if (isWaitingSelection){
+//プレイヤーの打牌選択待ち状態か判定
+function isWaiting(isWait_f, fn){
+  if (isWait_f){
     fn();
   }
 }
 
 
-// // //自家がテンパイしているか判定する
-// // function judge_tempai(){
-// //   //ToDo テンパイ判定(もシャンテン数判定も)プログラムが難しすぎて挫折
-// //   //次の処理
-// //   is_wait = true;
-// //   wait_cpu_loop();
-// // }
+// //自家がテンパイしているか判定する
+// function judge_tempai(){
+//   //ToDo テンパイ判定(もシャンテン数判定も)プログラムが難しすぎて挫折
+//   //次の処理
+//   is_wait = true;
+//   wait_cpu_loop();
+// }
 
 
-// // /*---------------------------------------------------
-// //   他家のアクション関連
-// // ----------------------------------------------------*/
-// // //他家がツモって捨てる(ツモ切り)
-// // function cpu_actions(i){
-// //   //ツモできる牌がある(残り牌が王牌の数より多い)時だけ動く
-// //   if(deck.length > THE_NUMBER_OF_TILES_IN_WAN_PAI){
-// //     tsumoAction(cpu_tsumo_tile, cpuTiles[i]);
+/*---------------------------------------------------
+  他家のアクション関連
+----------------------------------------------------*/
+//他家がツモって捨てる(ツモ切り)
+function cpuAction(i, deck, cpuTiles){
+  //ツモできる牌がある(残り牌が王牌の数より多い)時だけ動く
+  if(deck.length > THE_NUMBER_OF_TILES_IN_WAN_PAI){
+    //ツモ
+    getTile(deck, cpuTiles[i]);
 
-// //     //ToDo とりあえず手牌の中から配列番号をランダムに選んで捨ててる
-// //     let random = Math.floor(Math.random() * playerTiles.length);
-// //     //cpu_throw_away_tile[i].push(cpuTiles[i][random]);
-// //     console.log(cpuTiles[i][random]);
-// //     playerThrownAwayTiles[i+1].push(cpuTiles[i][random]);
-// //     cpuTiles[i].splice(random, 1);
+    //ToDo とりあえず手牌の中から配列番号をランダムに選んで捨ててる
+    let rand = Math.floor(Math.random() * cpuTiles.length);
+    let cpuThrownAwayTiles = cpuTiles[i][rand]
+    //cpu_throw_away_tile[i].push(cpuTiles[i][rand]);
 
-// //     //捨ててから理牌
-// //     //してもそんなに意味ないけど
-// //     riiPai(cpuTiles[i]);
+    playerThrownAwayTiles[i+1].push(cpuTiles[i][rand]);
+    cpuTiles[i].splice(rand, 1);
 
-// //     //描画し直し
-// //     drawAll();
+    //捨ててから理牌
+    //してもそんなに意味ないけど
+    riiPai(cpuTiles[i]);
 
-// //     if(cpu_n == 2){
-// //       cpu_n = 0;
-// //       playerAction();
-// //     }
-// //     else{
-// //       cpu_n++;
-// //       is_wait = true;
-// //       wait_cpu_loop();
-// //     }
-// //   }
-// //   else{
-// //     console.log("山が無くなりました！")
-// //     finish = true;
-// //   }
-// // }
+    //描画し直し
+    drawAll();
+
+    if(cpu_n == 2){
+      cpu_n = 0;
+      playerAction();
+    }
+    else{
+      cpu_n++;
+      is_wait = true;
+      wait_cpu_loop();
+    }
+  }
+  else{
+    console.log("山が無くなりました！")
+    finish = true;
+  }
+}
 
 
 // // //
@@ -445,12 +423,12 @@ function isWaiting(fn){
 // //   描画関連
 // // ----------------------------------------------------*/
 //全てを描画
-function drawAll(obj){
+function drawAll(deck, playerTiles, cpuTiles){
   clearCanvas();
-  drawTiles(obj.playerTiles);
-  drawCpuTiles(obj.cpuTiles);
+  drawTiles(playerTiles);
+  drawCpuTiles(cpuTiles);
   drawElevator();
-  drawTilesCount(obj.deck);
+  drawTilesCount(deck);
   // drawThrownAwayTiles();
 }
 
