@@ -267,8 +267,10 @@ async function playerAction(preDeck, prePlayersTiles){
     let deck = [...preDeck];
     let playerTiles = [...prePlayersTiles];
 
+    //ツモる
     [deck, playerTiles] = getTile(preDeck, prePlayersTiles);
 
+    //打牌
     let playerThrownAwayTiles;
     [playerTiles, playerThrownAwayTiles[playerThrownAwayTiles.length]] = await throwAway(deck, playerTiles);
 
@@ -288,7 +290,7 @@ function getTile(deck, preTiles) {
 
 
 // //自家の打牌アクション
-function throwAway(deck, playerTiles){
+async function throwAway(deck, playerTiles){
   let cursorSelecting = 0;
   const MOST_LEFT = 0;
   const MOST_RIGHT = 14
@@ -333,11 +335,59 @@ function throwAway(deck, playerTiles){
       //   }
   }});
 
-  return new Promise((resolve) => {
+
+  let cancel;
+  (async ()=>{
+    const a = asyncSetTimeout(1000,throwAwayFunc)
+    cancel = a.cancel
+    await a.exec() // ここで設定した時間分処理を待ったあとasyncFuncを実行する
+    // doSomething()
+  })()
+
+  cancel();
+}
+
+
+function asyncSetTimeout(msec, func){
+  let timeoutId
+  let r
+  const exec = function(){
+    return new Promise((res) => {
+      r = res
+      timeoutId = setTimeout(async () => {
+          timeoutId = null;
+          await func();
+          res();
+      },msec);
+    });
+  }
+  return {
+    exec,
+    cancel: () => {
+        if (timeoutId) {
+          clearTimeout(timeoutId)
+          timeoutId = null
+          r()
+        }
+    }
+  }
+}
+
+
+
+function asyncTimeout(msec, func){
+  let timeoutId;
+  let r;
+
+  const exec = () => new Promise((res) => {
+    r = res;
+    //打牌の時間切れの処理
     timeoutId = setTimeout(() => {
+      //手牌から適当に選ぶ
       let rand = Math.floor(Math.random() * playerTiles.length);
       let playerThrownAwayTiles = playerTiles[rand];
 
+      //適当に選んだ牌を捨てる
       playerTiles.splice(rand, 1);
       riiPai(playerTiles);
 
@@ -345,6 +395,8 @@ function throwAway(deck, playerTiles){
     }, 5000)
   })
 }
+
+
 
 
 //プレイヤーの打牌選択待ち状態か判定
